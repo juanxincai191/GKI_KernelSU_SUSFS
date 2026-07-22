@@ -907,7 +907,19 @@ jobs:
             exit 0
           }
           
-          # 查找实际的目标驱动文件
+          # 查找实际的目标驱动文件（适配多种电源管理芯片）
+          echo "=== 查找目标驱动文件 ==="
+          
+          # 1. 优先查找88pm系列真实现有芯片
+          CORE_DRIVER=$(find . -type f \( -name "*88pm*battery*.c" \) | head -1)
+          
+          # 2. 其次查找qcom_fg系列（备用方案）
+          if [ -z "$CORE_DRIVER" ]; then
+            CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
+            
+            # 如果还没有，尝试任何fuel gauge相关
+            if [ -z "$CORE_DRIVER" ]; then
+              CORE_DRIVER=$(find . -type f \( name="*fg*.c" OR name="*fuel*.c"\))|head-|grep power/supply; fi
           echo "=== 查找目标驱动文件 ==="
           CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
           ALG_DRIVER=$(find . -type f -name "qcom_fg_alg.c" 2>/dev/null | head -1)
@@ -976,7 +988,9 @@ jobs:
           echo "=== 小米电池参数补丁应用完成 ==="
           echo "注意：如果补丁应用失败，可能需要针对实际的驱动文件创建新的补丁"
 
-      - name: 克隆 Droidspaces 补丁仓库
+    if [!$CORE_DRIVER];then
+    
+- name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
           git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
