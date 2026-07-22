@@ -1,0 +1,195 @@
+# 电池参数补丁
+# 在内核驱动中添加对xm参数的支持
+# 适用于GKI内核高通电池管理驱动
+
+diff --git a/drivers/power/supply/qcom/qcom_fg_core.c b/drivers/power/supply/qcom/qcom_fg_core.c
+index 1234567..abcdefg 100644
+--- a/drivers/power/supply/qcom/qcom_fg_core.c
++++ b/drivers/power/supply/qcom/qcom_fg_core.c
+@@ -150,6 +150,12 @@ struct qcom_fg_chip {
+ 	int charge_iterm_uv;
+ 	int vbat_max_uv;
+ 	int ibatt_max_ua;
++	
++	/* Battery parameter overrides for Xiaomi devices */
++	bool enable_battery_override;
++	u32 override_design_capacity_mah;
++	u32 override_fv_max_uv;
++	u32 override_cv_voltage_uv;
++	u32 override_current_ma;
+ };
+ 
+ /* Device tree parsing */
+@@ -300,6 +306,45 @@ static int qcom_fg_parse_dt(struct qcom_fg_chip *chip)
+ 	chip->vbat_max_uv = val;
+ 
+ 	chip->ibatt_max_ua = val;
++
++	/* Xiaomi-specific battery parameter overrides */
++	dev_info(chip->dev, "Checking for Xiaomi battery override parameters...\n");
++
++	/* Check if override is explicitly enabled */
++	chip->enable_battery_override = of_property_read_bool(chip->dev->of_node, 
++							"xm,report-capacity-override");
++	if (chip->enable_battery_override)
++		dev_info(chip->dev, "Battery override enabled by device tree\n");
++
++	/* Parse design capacity override */
++	if (!of_property_read_u32(chip->dev->of_node, "xm,design-capacity-mah", &val)) {
++		chip->override_design_capacity_mah = val;
++		chip->vbat_max_uv = val * 1000; /* mAh to μAh */
++		dev_info(chip->dev, "Design capacity override: %d mAh (0x%X)\n", 
++			val, val);
++	}
++
++	/* Parse maximum float voltage override */
++	if (!of_property_read_u32(chip->dev->of_node, "xm,fv-max-uv", &val)) {
++		chip->override_fv_max_uv = val;
++		dev_info(chip->dev, "Float voltage override: %u μV (%.3fV) (0x%X)\n", 
++			val, (double)val / 1000000.0, val);
++	}
++
++	/* Parse CV (constant voltage) override */
++	if (!of_property_read_u32(chip->dev->of_node, "xm,non-ffc-cv", &val) ||
++	    !of_property_read_u32(chip->dev->of_node, "xm,non_ffc_cv", &val)) {
++		chip->override_cv_voltage_uv = val;
++		dev_info(chip->dev, "CV voltage override: %u μV (%.3fV)\n", 
++			val, (double)val / 1000000.0);
++	}
++
++	/* Parse charge current override from thermal mitigation */
++	if (!of_property_read_u32_array(chip->dev->of_node, "qcom,thermal-mitigation",
++						&val, 4)) {
++		dev_info(chip->dev, "Using custom thermal mitigation values\n");
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/power/supply/qcom/qcom_fg_alg.c b/drivers/power/supply/qcom/qcom_fg_alg.c
+index 7654321..fedcba9 100644
+--- a/drivers/power/supply/qcom/qcom_fg_alg.c
++++ b/drivers/power/supply/qcom/qcom_fg_alg.c
+@@ -400,8 +400,20 @@ int qcom_fg_get_prop_capacity(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
+-	
++	int original_capacity, override_capacity;
+ 	rc = qcom_fg_get_batt_status(chip);
++
+ 	val->intval = chip->capacity;
++
++	/* Apply battery capacity override if enabled */
++	if (chip->enable_battery_override && chip->override_design_capacity_mah > 0) {
++		/* Calculate capacity based on override */
++		/* Assuming the hardware reports capacity based on original design */
++		if (chip->vbat_max_uv > 0) {
++			/* Scale current capacity to new design capacity */
++			val->intval = (val->intval * chip->override_design_capacity_mah) / 
++				     max(chip->nominal_capacity_mah, 1);
++			dev_dbg(chip->dev, "Overridden capacity: %d%% (original: %d%%)\n",
++				val->intval, chip->capacity);
++		}
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/power/supply/qcom/qcom_fg_alg.c b/drivers/power/supply/qcom/qcom_fg_alg.c
+index 7654321..fedcba9 100644
+--- a/drivers/power/supply/qcom/qcom_fg_alg.c  
++++ b/drivers/power/supply/qcom/qcom_fg_alg.c
+@@ -500,12 +512,25 @@ static int qcom_fg_get_prop_voltage_now(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
++	int original_voltage, override_voltage;
+ 
+ 	rc = qcom_fg_read_vbatt(chip);
+ 	if (rc < 0) {
+ 		pr_err("Failed to read voltage\n");
+ 		return rc;
+ 	}
+-	val->intval = rc;
++	
++	original_voltage = rc;
++	override_voltage = rc;
++
++	/* Apply voltage override if enabled */
++	if (chip->enable_battery_override && chip->override_fv_max_uv > 0) {
++		/* Scale voltage to override max voltage */
++		if (chip->vbat_max_uv > 0) {
++			override_voltage = (rc * chip->override_fv_max_uv) / chip->vbat_max_uv;
++			dev_dbg(chip->dev, "Overridden voltage: %d μV (%.3fV) from %d μV (%.3fV)\n",
++				override_voltage, (double)override_voltage / 1000000.0,
++				original_voltage, (double)original_voltage / 1000000.0);
++		}
++	}
++	
++	val->intval = override_voltage;
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/power/supply/qcom/qcom_fg_alg.c b/drivers/power/supply/qcom/qcom_fg_alg.c
+index 7654321..fedcba9 100644
+--- a/drivers/power/supply/qcom/qcom_fg_alg.c
++++ b/drivers/power/supply/qcom/qcom_fg_alg.c
+@@ -800,6 +823,24 @@ int qcom_fg_get_prop_charge_full_design(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
++	int original_full_capacity;
+ 
+ 	rc = qcom_fg_read_design_capacity(chip);
+ 	if (rc < 0)
+ 		return rc;
+-	val->intval = rc;
+-	
++	original_full_capacity = rc;
++	
++	/* Apply design capacity override if enabled */
++	if (chip->enable_battery_override && chip->override_design_capacity_mah > 0) {
++		val->intval = chip->override_design_capacity_mah * 1000; /* mAh to μAh */
++		dev_info(chip->dev, "Overridden design capacity: %d μAh (%d mAh)\n",
++			val->intval, chip->override_design_capacity_mah);
++	} else {
++		val->intval = original_full_capacity;
++	}
++	
+ 	return 0;
+ }
+ 
+diff --git a/drivers/power/supply/qcom/qcom_fg_alg.c b/drivers/power/supply/qcom/qcom_fg_alg.c
+index 7654321..fedcba9 100644
+--- a/drivers/power/supply/qcom/qcom_fg_alg.c
++++ b/drivers/power/supply/qcom/qcom_fg_alg.c
+@@ -900,8 +931,22 @@ int qcom_fg_get_prop_charge_now(struct qcom_fg_chip *chip,
+ {
+ 	int rc;
+ 	int64_t charge_now;
++	int original_charge_now, override_charge_now;
+ 
+ 	rc = qcom_fg_read_batt_id(chip);
++
+ 	rc = qcom_fg_get_batt_status(chip);
++
+ 	charge_now = qcom_fg_read_charge_full(chip);
++
++	/* Apply capacity scaling if override enabled */
++	if (chip->enable_battery_override && chip->override_design_capacity_mah > 0 &&
++	    chip->nominal_capacity_mah > 0) {
++		/* Scale charge based on new design capacity */
++		charge_now = (charge_now * chip->override_design_capacity_mah) / 
++			    chip->nominal_capacity_mah;
++	}
++
+ 	if (charge_now < 0)
+ 		return charge_now;
+-	val->intval = charge_now;
++	
++	val->intval = charge_now;
++	
+ 	return 0;
+ }

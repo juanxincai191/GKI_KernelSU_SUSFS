@@ -1,0 +1,134 @@
+--- a/drivers/power/supply/qcom/qcom_fg_alg.c
++++ b/drivers/power/supply/qcom/qcom_fg_alg.c
+@@ -400,8 +400,20 @@ int qcom_fg_get_prop_capacity(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
++	int original_capacity, override_capacity;
+ 	float scaling_factor;
+ 
+ 	rc = qcom_fg_get_batt_status(chip);
+ 
+ 	val->intval = chip->capacity;
++
++	/* Apply battery capacity override if enabled */
++	if (chip->enable_battery_override && chip->override_design_capacity_mah > 0) {
++		/* Calculate capacity based on new design capacity vs original */
++		if (chip->original_design_capacity_mah > 0) {
++			/* Scale current capacity to new design capacity */
++			scaling_factor = (float)chip->override_design_capacity_mah / 
++						(float)chip->original_design_capacity_mah;
++			override_capacity = (int)(val->intval * scaling_factor);
++			
++			/* Cap at 100% */
++			override_capacity = min(override_capacity, 100);
++			
++			dev_dbg(chip->dev, "Overridden capacity: %d%% (original: %d%%, scale: %.2f)\n",
++				override_capacity, val->intval, scaling_factor);
++			
++			val->intval = override_capacity;
++		}
++	}
++
+ 	return 0;
+ }
+ 
+@@ -500,12 +512,25 @@ int qcom_fg_get_prop_voltage_now(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
++	int original_voltage, override_voltage;
++	float voltage_scaling;
+ 
+ 	rc = qcom_fg_read_vbatt(chip);
+ 	if (rc < 0) {
+ 		pr_err("Failed to read voltage\n");
+ 		return rc;
+ 	}
+-	val->intval = rc;
++	
++	original_voltage = rc;
++	override_voltage = rc;
++
++	/* Apply voltage override if enabled */
++	if (chip->enable_battery_override && chip->override_fv_max_uv > 0) {
++		/* Scale voltage to override max voltage */
++		if (chip->vbat_max_uv > 0) {
++			voltage_scaling = (float)chip->override_fv_max_uv / 
++					   (float)chip->vbat_max_uv;
++			override_voltage = (int)(original_voltage * voltage_scaling);
++			
++			dev_dbg(chip->dev, "Overridden voltage: %d μV (%.3fV) from %d μV (%.3fV)\n",
++				override_voltage, (double)override_voltage / 1000000.0,
++				original_voltage, (double)original_voltage / 1000000.0);
++		}
++	}
++	
++	val->intptr = override_voltage;
++
+ 	return 0;
+ }
+ 
+@@ -800,6 +823,24 @@ int qcom_fg_get_prop_charge_full_design(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
++	int original_full_capacity;
+ 
+ 	rc = qcom_fg_read_design_capacity(chip);
+ 	if (rc < 0)
+ 		return rc;
+-	val->int64val = rc;
+-	
++	original_full_capacity = rc;
++	
++	/* Apply design capacity override if enabled */
++	if (chip->enable_battery_override && chip->override_design_capacity_mah > 0) {
++		/* Direct override of design capacity in mAh */
++		val->int64val = chip->override_design_capacity_mah * 1000; /* mAh to μAh */
++		dev_info(chip->dev, "Overridden design capacity: %lld μAh (%d mAh)\n",
++			val->int64val, chip->override_design_capacity_mah);
++	} else {
++		val->int64val = original_full_capacity;
++	}
++	
+ 	return 0;
+ }
+ 
+@@ -900,8 +931,22 @@ int qcom_fg_get_prop_charge_now(struct qcom_fg_chip *chip,
+ 	union power_supply_propval *val)
+ {
+ 	int rc;
+-	int64_t charge_now;
++	int64_t charge_now, override_charge_now;
++	float charge_scaling;
++	int original_capacity, new_capacity;
+ 
+ 	rc = qcom_fg_read_batt_id(chip);
+ 
+-	rc = qcom_fg_get_batt_status(chip);
+-
+ 	charge_now = qcom_fg_read_charge_full(chip);
++
++	/* Apply capacity scaling if override enabled */
++	if (chip->enable_battery_override && chip->override_design_capacity_mah > 0 &&
++	    chip->original_design_capacity_mah > 0) {
++		/* Scale charge based on new design capacity */
++		charge_scaling = (float)chip->override_design_capacity_mah /
++				(float)chip->original_design_capacity_mah;
++		override_charge_now = (int64_t)(charge_now * charge_scaling);
++		
++		dev_dbg(chip->dev, "Overridden charge: %lld uAh (original: %lld uAh, scale: %.2f)\n",
++			override_charge_now, charge_now, charge_scaling);
++		
++		charge_now = override_charge_now;
++	}
++
+ 	if (charge_now < 0)
+ 		return charge_now;
+-	val->int64val = charge_now;
++	
++	val->int64val = charge_now;
++	
+ 	return 0;
+ }
