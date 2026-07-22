@@ -85,6 +85,11 @@ on:
         required: true
         type: boolean
         default: false
+      enable_battery_patch:
+        description: "启用小米电池参数补丁 (6000mAh, 4.53V)"
+        required: false
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       kernelsu_variant:
@@ -126,6 +131,10 @@ on:
         type: string
         default: "上传全部"
       droidspaces_ntsync:
+        required: false
+        type: boolean
+        default: false
+      enable_battery_patch:
         required: false
         type: boolean
         default: false
@@ -229,6 +238,7 @@ jobs:
       droidspaces: ${{ inputs.droidspaces || 'off' }}
       droidspaces_ntsync: ${{ inputs.droidspaces_ntsync || false }}
       artifact_upload_mode: ${{ inputs.artifact_upload_mode }}
+      enable_battery_patch: ${{ inputs.enable_battery_patch }}
 
   # 仅在直接触发时运行，从 main.yml 调用时跳过
   get-ksu-manager:

@@ -79,11 +79,11 @@ on:
       droidspaces_ntsync:
         required: false
         type: boolean
+        default: false
       enable_battery_patch:
         description: "启用小米电池参数补丁 (6000mAh, 4.53V)"
         required: false
         type: boolean
-        default: false
         default: false
 
 jobs:
@@ -555,75 +555,6 @@ jobs:
           echo "已更新 get_ksu_version_full 模板: $VERSION_TEMPLATE"
 
       - name: 应用 SUSFS 补丁
-- name: 应用小米电池参数补丁
-        if: inputs.enable_battery_patch
-        working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          echo "=== 开始应用小米电池参数补丁 ==="
-          echo "目标: 6000mAh, 4.53V 充电电压/充满电压"
-          
-          # 检查补丁文件
-          BATTERY_PATCHES_DIR="$GITHUB_WORKSPACE/patches"
-          CORE_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_core_battery_override.patch"
-          ALG_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_alg_battery_override.patch"
-          
-          if [ ! -d "$BATTERY_PATCHES_DIR" ]; then
-            echo "::error ::补丁目录不存在: $BATTERY_PATCHES_DIR"
-            echo "请确保补丁文件已上传到仓库的 patches/ 目录"
-            exit 1
-          fi
-          
-          echo "查找电池驱动文件..."
-          # 查找高通电池管理驱动文件
-          CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
-          ALG_DRIVER=$(find . -type f -name "qcom_fg_alg.c" 2>/dev/null | head -1)
-          
-          if [ -z "$CORE_DRIVER" ] && [ -z "$ALG_DRIVER" ]; then
-            echo "::warning ::未找到高通电池驱动文件，尝试通用电池驱动"
-            CORE_DRIVER=$(find . -type f -path "*/power/supply/*" -name "*battery*.c" | grep -i qcom | head -1)
-          fi
-          
-          echo "找到核心驱动: $CORE_DRIVER"
-          echo "找到算法驱动: $ALG_DRIVER"
-          
-          # 应用核心驱动补丁
-          if [ -n "$CORE_DRIVER" ] && [ -f "$CORE_PATCH" ]; then
-            echo "应用核心驱动补丁..."
-            cd "$(dirname "$CORE_DRIVER")"
-            if ! patch -p1 --dry-run < "$CORE_PATCH"; then
-              echo "::warning ::核心驱动补丁预检查失败，可能已应用或上下文不匹配"
-            else
-              patch -p1 < "$CORE_PATCH" || echo "::warning ::核心驱动补丁应用失败"
-            fi
-            cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
-          else
-            echo "::warning ::核心驱动补丁文件不存在或目标驱动未找到"
-          fi
-          
-          # 应用算法驱动补丁
-          if [ -n "$ALG_DRIVER" ] && [ -f "$ALG_PATCH" ]; then
-            echo "应用算法驱动补丁..."
-            cd "$(dirname "$ALG_DRIVER")"
-            if ! patch -p1 --dry-run < "$ALG_PATCH"; then
-              echo "::warning ::算法驱动补丁预检查失败，可能已应用或上下文不匹配"
-            else
-              patch -p1 < "$ALG_PATCH" || echo "::warning ::算法驱动补丁应用失败"
-            fi
-            cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
-          else
-            echo "::warning ::算法驱动补丁文件不存在或目标驱动未找到"
-          fi
-          
-          # 验证补丁是否成功应用
-          echo "=== 验证补丁应用结果 ==="
-          if grep -r "override_design_capacity_mah\|enable_battery_override\|xm,design-capacity-mah" . 2>/dev/null; then
-            echo "✅ 电池参数覆盖功能已成功集成到内核源码"
-            grep -r "override_design_capacity_mah\|enable_battery_override" . 2>/dev/null | head -5
-          else
-            echo "::warning ::未找到电池覆盖功能的代码痕迹"
-          fi
-          
-          echo "=== 小米电池参数补丁应用完成 ==="        if: inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           echo "应用 SUSFS 补丁..."
@@ -942,6 +873,76 @@ jobs:
               fi
             fi
           fi
+
+      - name: 应用小米电池参数补丁
+        if: inputs.enable_battery_patch
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          echo "=== 开始应用小米电池参数补丁 ==="
+          echo "目标: 6000mAh, 4.53V 充电电压/充满电压"
+          
+          # 检查补丁文件
+          BATTERY_PATCHES_DIR="$GITHUB_WORKSPACE/patches"
+          CORE_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_core_battery_override.patch"
+          ALG_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_alg_battery_override.patch"
+          
+          if [ ! -d "$BATTERY_PATCHES_DIR" ]; then
+            echo "::error ::补丁目录不存在: $BATTERY_PATCHES_DIR"
+            echo "请确保补丁文件已上传到仓库的 patches/ 目录"
+            exit 1
+          fi
+          
+          echo "查找电池驱动文件..."
+          # 查找高通电池管理驱动文件
+          CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
+          ALG_DRIVER=$(find . -type f -name "qcom_fg_alg.c" 2>/dev/null | head -1)
+          
+          if [ -z "$CORE_DRIVER" ] && [ -z "$ALG_DRIVER" ]; then
+            echo "::warning ::未找到高通电池驱动文件，尝试通用电池驱动"
+            CORE_DRIVER=$(find . -type f -path "*/power/supply/*" -name "*battery*.c" | grep -i qcom | head -1)
+          fi
+          
+          echo "找到核心驱动: $CORE_DRIVER"
+          echo "找到算法驱动: $ALG_DRIVER"
+          
+          # 应用核心驱动补丁
+          if [ -n "$CORE_DRIVER" ] && [ -f "$CORE_PATCH" ]; then
+            echo "应用核心驱动补丁..."
+            cd "$(dirname "$CORE_DRIVER")"
+            if ! patch -p1 --dry-run < "$CORE_PATCH"; then
+              echo "::warning ::核心驱动补丁预检查失败，可能已应用或上下文不匹配"
+            else
+              patch -p1 < "$CORE_PATCH" || echo "::warning ::核心驱动补丁应用失败"
+            fi
+            cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
+          else
+            echo "::warning ::核心驱动补丁文件不存在或目标驱动未找到"
+          fi
+          
+          # 应用算法驱动补丁
+          if [ -n "$ALG_DRIVER" ] && [ -f "$ALG_PATCH" ]; then
+            echo "应用算法驱动补丁..."
+            cd "$(dirname "$ALG_DRIVER")"
+            if ! patch -p1 --dry-run < "$ALG_PATCH"; then
+              echo "::warning ::算法驱动补丁预检查失败，可能已应用或上下文不匹配"
+            else
+              patch -p1 < "$ALG_PATCH" || echo "::warning ::算法驱动补丁应用失败"
+            fi
+            cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
+          else
+            echo "::warning ::算法驱动补丁文件不存在或目标驱动未找到"
+          fi
+          
+          # 验证补丁是否成功应用
+          echo "=== 验证补丁应用结果 ==="
+          if grep -r "override_design_capacity_mah\|enable_battery_override\|xm,design-capacity-mah" . 2>/dev/null; then
+            echo "✅ 电池参数覆盖功能已成功集成到内核源码"
+            grep -r "override_design_capacity_mah\|enable_battery_override" . 2>/dev/null | head -5
+          else
+            echo "::warning ::未找到电池覆盖功能的代码痕迹"
+          fi
+          
+          echo "=== 小米电池参数补丁应用完成 ==="
 
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
