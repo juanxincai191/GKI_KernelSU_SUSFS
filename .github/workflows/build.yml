@@ -881,7 +881,9 @@ jobs:
           echo "=== 开始应用小米电池参数补丁 ==="
           echo "目标: 6000mAh, 4.53V 充电电压/充满电压"
           
-          # 调试信息：列出所有电池相关驱动文件
+          # 补丁文件路径（确保使用绝对路径）
+          BATTERY_PATCHES_DIR="${{ github.workspace }}/patches"
+          
           echo "=== 查找所有电池驱动文件 ==="
           echo "power/supply 目录中的C文件:"
           find . -type f -path "*/power/supply/*" -name "*.c" | head -20
@@ -897,12 +899,9 @@ jobs:
           find . -type f -name "*qcom*.c" | head -20
           
           # 补丁文件路径
-          BATTERY_PATCHES_DIR="$GITHUB_WORKSPACE/patches"
           CORE_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_core_battery_override.patch"
           ALG_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_alg_battery_override.patch"
-          GENERAL_PATCH="$BATTERY_PATCHES_DIR/battery_override.patch"
           
-          echo "=== 检查补丁目录 ==="
           ls -la "$BATTERY_PATCHES_DIR" 2>/dev/null || {
             echo "::warning ::补丁目录不存在: $BATTERY_PATCHES_DIR"
             exit 0
@@ -943,7 +942,7 @@ jobs:
               echo "补丁目标文件: $PATCH_TARGET"
               echo "当前目录文件: $(ls -1 | head -5)"
             fi
-            cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
+            # 核心驱动补丁应用完成后，回到工作目录
           else
             echo "::warning ::核心驱动补丁文件不存在或目标驱动未找到"
           fi
@@ -961,22 +960,9 @@ jobs:
               PATCH_TARGET=$(grep "^--- a/" "$ALG_PATCH" | head -1 | sed 's/^--- a\///')
               echo "补丁目标文件: $PATCH_TARGET"
             fi
-            cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
+            # 算法驱动补丁应用完成后，回到工作目录
           else
             echo "::warning ::算法驱动补丁文件不存在或目标驱动未找到"
-          fi
-          
-          # 如果专用补丁失败，尝试通用补丁
-          if [ -f "$GENERAL_PATCH" ]; then
-            echo "专用补丁失败，尝试通用补丁..."
-            # 在电源管理目录中查找合适的文件
-            POWER_SUPPLY_DIR="./drivers/power/supply"
-            if [ -d "$POWER_SUPPLY_DIR" ]; then
-              cd "$POWER_SUPPLY_DIR"
-              # 通用补丁应用逻辑可以在这里添加
-              echo "在电源管理目录中应用通用补丁"
-              cd "$GITHUB_WORKSPACE/$KERNEL_ROOT/common"
-            fi
           fi
           
           # 验证补丁是否成功应用
