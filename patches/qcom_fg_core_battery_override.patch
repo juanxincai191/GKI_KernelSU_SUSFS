@@ -1,0 +1,65 @@
+--- a/drivers/power/supply/qcom/qcom_fg_core.c
++++ b/drivers/power/supply/qcom/qcom_fg_core.c
+@@ -150,6 +150,12 @@ struct qcom_fg_chip {
+ 	int charge_iterm_uv;
+ 	int vbat_max_uv;
+ 	int ibatt_max_ua;
+ 	
++	/* Battery parameter overrides for Xiaomi devices */
++	bool enable_battery_override;
++	u32 override_design_capacity_mah;
++	u32 override_fv_max_uv;
++	u32 override_cv_voltage_uv;
++	u32 override_current_ma;
++	int original_design_capacity_mah;
+ };
+ 
+ /* Device tree parsing */
+@@ -300,6 +306,45 @@ static int qcom_fg_parse_dt(struct qcom_fg_chip *chip)
+ 	chip->vbat_max_uv = val;
+ 
+ 	chip->ibatt_max_ua = val;
++
++	/* Xiaomi-specific battery parameter overrides */
++	dev_info(chip->dev, "Checking for Xiaomi battery override parameters...\n");
++
++	/* Check if override is explicitly enabled */
++	chip->enable_battery_override = of_property_read_bool(chip->dev->of_node, 
++							"xm,report-capacity-override");
++	if (chip->enable_battery_override)
++		dev_info(chip->dev, "Battery override enabled by device tree\n");
++
++	/* Parse design capacity override */
++	if (!of_property_read_u32(chip->dev->of_node, "xm,design-capacity-mah", &val)) {
++		chip->override_design_capacity_mah = val;
++		/* Store original design capacity before override */
++		if (chip->vbat_max_uv == 0) {
++			chip->original_design_capacity_mah = val;
++		}
++		dev_info(chip->dev, "Design capacity override: %d mAh (0x%X)\n", 
++			val, val);
++	}
++
++	/* Parse maximum float voltage override */
++	if (!of_property_read_u32(chip->dev->of_node, "xm,fv-max-uv", &val)) {
++		chip->override_fv_max_uv = val;
++		dev_info(chip->dev, "Float voltage override: %u μV (%.3fV) (0x%X)\n", 
++			val, (double)val / 1000000.0, val);
++	}
++
++	/* Parse CV (constant voltage) override */
++	if (!of_property_read_u32(chip->dev->of_node, "xm,non-ffc-cv", &val) ||
++	    !of_property_read_u32(chip->dev->of_node, "xm,non_ffc_cv", &val)) {
++		chip->override_cv_voltage_uv = val;
++		dev_info(chip->dev, "CV voltage override: %u μV (%.3fV)\n", 
++			val, (double)val / 1000000.0);
++	}
++
++	/* Parse charge current override from thermal mitigation */
++	if (!of_property_read_u32_array(chip->dev->of_node, "qcom,thermal-mitigation",
++						thermal_vals, 4)) {
++		dev_info(chip->dev, "Using custom thermal mitigation values\n");
++	}
++
+ 	return 0;
+ }
