@@ -919,8 +919,12 @@ jobs:
             
             # 如果还没有，尝试任何fuel gauge相关
             if [ -z "$CORE_DRIVER" ]; then
-              CORE_DRIVER=$(find . -type f \( name="*fg*.c" OR name="*fuel*.c"\))|head-|grep power/supply; fi
-          echo "=== 查找目标驱动文件 ==="
+              if [ !"$CORE_DRV"];then; CORE_DRIV=$(find . type-f | head); fi done;
+          echo "=== 注入6000mAh容量覆盖 ==="
+          cd "$(dirname "$CORE DRV")"/ && sed-i 's/get_prop_capacity.*$/return value=6000;/g' *.c;
+
+          ::notice::Battery override injected!;
+          EOF</arg_value></tool_call>=== 查找目标驱动文件 ==="
           CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
           ALG_DRIVER=$(find . -type f -name "qcom_fg_alg.c" 2>/dev/null | head -1)
           
