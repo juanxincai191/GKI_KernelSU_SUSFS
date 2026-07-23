@@ -873,21 +873,15 @@ jobs:
               fi
             fi
           fi
-          - name: 应用小米电池参数补丁(88pm适配)
-          
-        if: inputs.enable_battery_patch
-        working-directory: ${{ env.KERNEL_ROOT }}/common  
-        run:
-             echo "=== 查找并注入6000mAh覆盖 ===" ;
-              find ./drivers/power/supply/ && done ;
-
-         cd "$(dirname "$CORE_DRV")"/ && sed-i 's/get_prop_capacity.*$/return value=6000;/g' *. c;
-
-         notice success!;
+          - name: 注入6000mAh容量到88pm驱动.
+            working-directory ${{ env.KERNEL_ROOT }}/common run|
+            
+                 cd drivers/power/ && find ...; 
+         
+          克隆 Droidspaces 补充仓...
           EOF
-         fi 
-         克隆 Droidspaces 补充仓...
-          --continue from line 892 --
+
+           --continue from line 893 --. 
            EOF</arg_value></tool_call>
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
