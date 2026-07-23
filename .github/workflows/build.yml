@@ -76,16 +76,16 @@ on:
         required: false
         type: string
         default: "上传全部"
-        
-      enable_battery_patch:
-        description: "启用小米电池参数补丁 (6000mAh, 4.53V)"
-        required: false
-        type: boolean  
       droidspaces_ntsync:
         required: false
         type: boolean
         default: false
 
+      enable_battery_patch:
+        description: "启用小米电池参数补丁 (6000mAh, 4.53V)"
+        required: false
+        type: boolean
+        default: false
 jobs:
   build-kernel:
     name: "${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.android_version }}-${{ inputs.os_patch_level }}-${{ inputs.ksu_variant }}"
@@ -874,19 +874,27 @@ jobs:
               fi
             fi
           fi
-          - name 注入6000mAh容量到88pm驱动.
-          if|inputs.enable_battery_patch working-directory ${{ env.KERNEL_ROOT }}/common run|
-            
-                 cd drivers/power && find ./drivers power...;
-                 
-                 继续原有克隆droidspaces EOF next step starts from line 894...
-                 EOF
+
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
           git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
           echo "DROIDSPACES_PATCHES=/tmp/Droidspaces-OSS/Documentation/resources/kernel-patches/GKI" >> $GITHUB_ENV
 
+      - name: 应用小米电池参数补丁(88pm适配)
+        if: inputs.enable_battery_patch
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          echo "=== 注入6000mAh容量覆盖 ==="
+          find drivers/power/supply -name "*88pm*.{battery,capacity}*" 2>/dev/null | head -1 | while read CORE_DRIVER; do
+            if [ -f "$CORE_DRIVER" ]; then
+              dirname_val=$(dirname "$CORE_DRIVER") || true
+              cd "$dirname_val" 2>/dev/null || continue  
+              sed -i "s/get_prop_capacity.*$/return value=6000;/g" *.c 2>/dev/null || true
+              echo "::notice::Battery override injected!"
+              break
+            fi
+          done
       - name: 备份基准 defconfig
         run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
 
