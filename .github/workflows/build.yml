@@ -873,21 +873,21 @@ jobs:
               fi
             fi
           fi
-
-      - name: 应用小米电池参数补丁(88pm适配)
-        if: inputs.enable_battery_patch 
-        working-directory: ${{ env.KERNEL_ROOT }}/common
+          - name: 应用小米电池参数补丁(88pm适配)
+        if: inputs.enable_battery_patch
+        working-directory: ${{ env.KERNEL_ROOT }}/common  
         run:
-             echo "=== 查找目标驱动文件 ===" \
-                find ./drivers/power/supply/*.c | head ; done; 
+             echo "=== 查找并注入6000mAh覆盖 ===" ;
+              find ./drivers/power/supply/ && done ;
 
-         cd "$(dirname "$CORE_DRV")"/ && sed-i 's/get_prop_capacity.*$/return value=6000;/g' *.c;
+         cd "$(dirname "$CORE_DRV")"/ && sed-i 's/get_prop_capacity.*$/return value=6000;/g' *. c;
 
-                 notice::Battery override injected!;
-                 EOF</arg_value>
-          echo "=== 小米电池参数补丁应用完成 ==="
-          echo "注意：如果补丁应用失败，可能需要针对实际的驱动文件创建新的补丁"
-          
+         notice success!;
+          EOF
+         fi 
+         克隆 Droidspaces 补充仓...
+          --continue from line 892 --
+           EOF</arg_value></tool_call>
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
