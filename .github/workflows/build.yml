@@ -874,14 +874,13 @@ jobs:
               fi
             fi
           fi
-          -name 注入6000mAh容量到88pm驱动.
+          - name 注入6000mAh容量到88pm驱动.
           if|inputs.enable_battery_patch working-directory ${{ env.KERNEL_ROOT }}/common run|
             
                  cd drivers/power && find ./drivers power...;
-
-          继续原有克隆droidspaces--EOF next step starts from line 893 of original...
-          EOF</arg_value>
-
+                 
+                 继续原有克隆droidspaces EOF next step starts from line 894...
+                 EOF
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
