@@ -987,8 +987,6 @@ jobs:
           
           echo "=== 小米电池参数补丁应用完成 ==="
           echo "注意：如果补丁应用失败，可能需要针对实际的驱动文件创建新的补丁"
-
-    if [!$CORE_DRIVER];then
     
 - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
