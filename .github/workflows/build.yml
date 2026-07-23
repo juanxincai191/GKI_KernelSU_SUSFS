@@ -874,8 +874,7 @@ jobs:
             fi
           fi
           - name: 应用小米电池参数补丁(88pm适配)
-        if: inputs.enable_battery_patch
-        working-directory: ${{ env.KERNEL_ROOT }}/common  
+        if: inputs.enable_battery_patch working-directory: ${{ env.KERNEL_ROOT }}/common  
         run:
              echo "=== 查找并注入6000mAh覆盖 ===" ;
               find ./drivers/power/supply/ && done ;
