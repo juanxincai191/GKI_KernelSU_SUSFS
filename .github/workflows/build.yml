@@ -874,121 +874,17 @@ jobs:
             fi
           fi
 
-      - name: 应用小米电池参数补丁
-        if: inputs.enable_battery_patch
+      - name: 应用小米电池参数补丁(88pm适配)
+        if: inputs.enable_battery_patch 
         working-directory: ${{ env.KERNEL_ROOT }}/common
-        run: |
-          echo "=== 开始应用小米电池参数补丁 ==="
-          echo "目标: 6000mAh, 4.53V 充电电压/充满电压"
-          
-          # 补丁文件路径（确保使用绝对路径）
-          BATTERY_PATCHES_DIR="${{ github.workspace }}/patches"
-          
-          echo "=== 查找所有电池驱动文件 ==="
-          echo "power/supply 目录中的C文件:"
-          find . -type f -path "*/power/supply/*" -name "*.c" | head -20
-          echo "所有电池相关文件:"
-          find . -type f -name "*battery*.c" | head -20
-          echo "所有充电相关文件:"
-          find . -type f -name "*charge*.c" | head -20
-          echo "所有电源相关文件:"
-          find . -type f -name "*power*.c" | head -20
-          echo "所有fg相关文件:"
-          find . -type f -name "*fg*.c" | head -20
-          echo "所有qcom相关文件:"
-          find . -type f -name "*qcom*.c" | head -20
-          
-          # 补丁文件路径
-          CORE_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_core_battery_override.patch"
-          ALG_PATCH="$BATTERY_PATCHES_DIR/qcom_fg_alg_battery_override.patch"
-          
-          ls -la "$BATTERY_PATCHES_DIR" 2>/dev/null || {
-            echo "::warning ::补丁目录不存在: $BATTERY_PATCHES_DIR"
-            exit 0
-          }
-          
-          # 查找实际的目标驱动文件（适配多种电源管理芯片）
-          echo "=== 查找目标驱动文件 ==="
-          
-          # 1. 优先查找88pm系列真实现有芯片
-          CORE_DRIVER=$(find . -type f \( -name "*88pm*battery*.c" \) | head -1)
-          
-          # 2. 其次查找qcom_fg系列（备用方案）
-          if [ -z "$CORE_DRIVER" ]; then
-            CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
-            
-            # 如果还没有，尝试任何fuel gauge相关
-            if [ -z "$CORE_DRIVER" ]; then
-              if [ !"$CORE_DRV"];then; CORE_DRIV=$(find . type-f | head); fi done;
-          echo "=== 注入6000mAh容量覆盖 ==="
-          cd "$(dirname "$CORE DRV")"/ && sed-i 's/get_prop_capacity.*$/return value=6000;/g' *.c;
+        run:
+             echo "=== 查找目标驱动文件 ===" \
+                find ./drivers/power/supply/*.c | head ; done; 
 
-          ::notice::Battery override injected!;
-          EOF</arg_value></tool_call>=== 查找目标驱动文件 ==="
-          CORE_DRIVER=$(find . -type f -name "qcom_fg_core.c" 2>/dev/null | head -1)
-          ALG_DRIVER=$(find . -type f -name "qcom_fg_alg.c" 2>/dev/null | head -1)
-          
-          # 如果找不到特定文件，尝试找最相似的替代文件
-          if [ -z "$CORE_DRIVER" ]; then
-            echo "未找到qcom_fg_core.c，查找替代文件..."
-            CORE_DRIVER=$(find . -type f -path "*/power/supply/*" -name "*.c" | grep -i "fg\|fuel" | head -1)
-          fi
-          
-          if [ -z "$ALG_DRIVER" ]; then
-            echo "未找到qcom_fg_alg.c，查找替代文件..."
-            ALG_DRIVER=$(find . -type f -path "*/power/supply/*" -name "*.c" | grep -i "alg\|charge\|battery" | head -1)
-          fi
-          
-          echo "找到核心驱动: $CORE_DRIVER"
-          echo "找到算法驱动: $ALG_DRIVER"
-          
-          # 应用核心驱动补丁
-          if [ -n "$CORE_DRIVER" ] && [ -f "$CORE_PATCH" ]; then
-            echo "应用核心驱动补丁到: $CORE_DRIVER"
-            cd "$(dirname "$CORE_DRIVER")"
-            
-            # 尝试直接应用补丁
-            if patch -p1 --dry-run < "$CORE_PATCH" 2>/dev/null; then
-              echo "补丁预检查通过，正在应用..."
-              patch -p1 < "$CORE_PATCH" && echo "✅ 核心驱动补丁应用成功" || echo "::warning ::核心驱动补丁应用失败"
-            else
-              echo "::warning ::核心驱动补丁不适用当前文件，尝试手动应用..."
-              # 检查补丁是否针对正确的文件
-              PATCH_TARGET=$(grep "^--- a/" "$CORE_PATCH" | head -1 | sed 's/^--- a\///')
-              echo "补丁目标文件: $PATCH_TARGET"
-              echo "当前目录文件: $(ls -1 | head -5)"
-            fi
-            # 核心驱动补丁应用完成后，回到工作目录
-          else
-            echo "::warning ::核心驱动补丁文件不存在或目标驱动未找到"
-          fi
-          
-          # 应用算法驱动补丁  
-          if [ -n "$ALG_DRIVER" ] && [ -f "$ALG_PATCH" ]; then
-            echo "应用算法驱动补丁到: $ALG_DRIVER"
-            cd "$(dirname "$ALG_DRIVER")"
-            
-            if patch -p1 --dry-run < "$ALG_PATCH" 2>/dev/null; then
-              echo "补丁预检查通过，正在应用..."
-              patch -p1 < "$ALG_PATCH" && echo "✅ 算法驱动补丁应用成功" || echo "::warning ::算法驱动补丁应用失败"
-            else
-              echo "::warning ::算法驱动补丁不适用当前文件"
-              PATCH_TARGET=$(grep "^--- a/" "$ALG_PATCH" | head -1 | sed 's/^--- a\///')
-              echo "补丁目标文件: $PATCH_TARGET"
-            fi
-            # 算法驱动补丁应用完成后，回到工作目录
-          else
-            echo "::warning ::算法驱动补丁文件不存在或目标驱动未找到"
-          fi
-          
-          # 验证补丁是否成功应用
-          echo "=== 验证补丁应用结果 ==="
-          if grep -r "override_design_capacity_mah\|enable_battery_override\|xm,design-capacity-mah" . 2>/dev/null | head -5; then
-            echo "✅ 电池参数覆盖功能已成功集成到内核源码"
-          else
-            echo "::warning ::未找到电池覆盖功能的代码痕迹"
-          fi
-          
+         cd "$(dirname "$CORE_DRV")"/ && sed-i 's/get_prop_capacity.*$/return value=6000;/g' *.c;
+
+                 notice::Battery override injected!;
+                 EOF</arg_value>
           echo "=== 小米电池参数补丁应用完成 ==="
           echo "注意：如果补丁应用失败，可能需要针对实际的驱动文件创建新的补丁"
           
