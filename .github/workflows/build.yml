@@ -76,12 +76,11 @@ on:
         required: false
         type: string
         default: "上传全部"
-      droidspaces_ntsync:
-        required: false
-        type: boolean
-        default: false
-      enable_battery_patch:
+              enable_battery_patch:
         description: "启用小米电池参数补丁 (6000mAh, 4.53V)"
+        required: false
+        type: boolean  
+      droidspaces_ntsync:
         required: false
         type: boolean
         default: false
@@ -555,6 +554,7 @@ jobs:
           echo "已更新 get_ksu_version_full 模板: $VERSION_TEMPLATE"
 
       - name: 应用 SUSFS 补丁
+        if: inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           echo "应用 SUSFS 补丁..."
@@ -873,16 +873,14 @@ jobs:
               fi
             fi
           fi
-          - name: 注入6000mAh容量到88pm驱动.
-            working-directory ${{ env.KERNEL_ROOT }}/common run|
+          -name 注入6000mAh容量到88pm驱动.
+          if|inputs.enable_battery_patch working-directory ${{ env.KERNEL_ROOT }}/common run|
             
-                 cd drivers/power/ && find ...; 
-         
-          克隆 Droidspaces 补充仓...
-          EOF
+                 cd drivers/power && find ./drivers power...;
 
-           --continue from line 893 --. 
-           EOF</arg_value></tool_call>
+          继续原有克隆droidspaces--EOF next step starts from line 893 of original...
+          EOF</arg_value>
+
       - name: 克隆 Droidspaces 补丁仓库
         if: inputs.droidspaces != 'off'
         run: |
