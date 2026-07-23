@@ -76,7 +76,8 @@ on:
         required: false
         type: string
         default: "上传全部"
-              enable_battery_patch:
+        
+      enable_battery_patch:
         description: "启用小米电池参数补丁 (6000mAh, 4.53V)"
         required: false
         type: boolean  
